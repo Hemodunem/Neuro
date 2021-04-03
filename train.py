@@ -53,7 +53,7 @@ model.compile(optimizer='sgd',
               metrics=['accuracy'])
 
 # обучаем нейросеть
-model.fit(X_train, y_train, epochs=100, batch_size=32)
+model.fit(X_train, y_train, epochs=10, batch_size=128)
 
 # тестируем нейросеть
 model.evaluate(X_test, y_test)

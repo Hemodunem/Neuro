@@ -11,6 +11,8 @@ import numpy as np
 import tensorflow.keras as keras
 from PIL import Image, ImageQt
 
+model = keras.models.load_model('mnist.h5')
+
 
 # window class
 class Window(QMainWindow):
@@ -38,17 +40,17 @@ class Window(QMainWindow):
 
         # creating image object
         self.image = QImage(QSize(500, 500), QImage.Format_RGB32)
-        print(str(self.rect()))
 
-        #
-        self.label = QLabel(self)
-        self.label.setGeometry(510, 10, 180, 390)
-        self.label.setText("Ы")
-        self.label.setAlignment(Qt.AlignCenter)
-        font = self.label.font()
-        font.setPointSize(50)
-        font.setBold(True)
-        self.label.setFont(font)
+        self.labels = []
+        for i in range(0, 10):
+            label = QLabel(self)
+            label.setGeometry(510, 10 + 37 * i, 180, 39)
+            label.setText(str(i) + ": ")
+            label.setAlignment(Qt.AlignLeft)
+            font = label.font()
+            font.setPointSize(28)
+            label.setFont(font)
+            self.labels.append(label)
 
         # making image color to white
         self.image.fill(Qt.white)
@@ -57,13 +59,12 @@ class Window(QMainWindow):
         # drawing flag
         self.drawing = False
         # default brush size
-        self.brushSize = 32
+        self.brushSize = 50
         # default color
         self.brushColor = Qt.black
 
         # QPoint object to tract the point
         self.lastPoint = QPoint()
-
 
     # method for checking mouse cicks
     def mousePressEvent(self, event):
@@ -102,6 +103,7 @@ class Window(QMainWindow):
         if event.button() == Qt.LeftButton:
             # make drawing flag false
             self.drawing = False
+            self.predict()
 
     # paint event
     def paintEvent(self, event):
@@ -128,21 +130,74 @@ class Window(QMainWindow):
         self.update()
 
     def predict(self):
+        global model
+
+        def plot_image(pixels: np.array, width=28, height=28):
+            plt.imshow(pixels.reshape((width, height)), cmap='gray')
+            plt.show()
+
         pic = ImageQt.fromqimage(self.image)
-        pic = pic.resize((28, 28), Image.ANTIALIAS)
+        pic = pic.resize((28, 28))
         pixels = np.asarray(pic.getdata())
+
         pixels = np.array([round(255 - sum(e) / len(e)) for e in pixels])
+        # plot_image(pixels)
+
+        left = 28
+        top = 28
+        right = 0
+        bottom = 0
 
 
-        image_to_predict = pixels
+        for y in range(0, 28):
+            for x in range(0, 28):
+                index = y * 28 + x
+                pixel = pixels[index]
+                is_black = pixel == 0
+                if not is_black:
+                    left = min(left, x)
+                    top = min(top, y)
+                    right = max(right, x)
+                    bottom = max(bottom, y)
+                print(f'{pixels[index]:4}', end='')
+            print()
+        right += 1
+        bottom += 1
+        width = right - left
+        height = bottom - top
 
-        model = keras.models.load_model('mnist.h5')
+        print(f"left: {left}, top: {top}")
+        print(f"right: {right}, bottom: {bottom}")
+        print(f"width: {width}, height: {height}")
+
+        pic = pic.crop((left, top, right, bottom))
+
+        content = np.asarray(pic.getdata())
+        content = np.array([round(255 - sum(e) / len(e)) for e in content])
+        # plot_image(content, height, width)
+
+        pixels_matrix = np.array([[0] * 28] * 28)
+        print(pixels_matrix.shape)
+        x = (28 - width) // 2
+        y = (28 - height) // 2
+
+        pixels_matrix[y:(y + height), x:(x+width)] = content.reshape(height, width)
+
+        plot_image(pixels_matrix)
+
+        image_to_predict = pixels_matrix
+
         predicted_results = model.predict(image_to_predict.reshape((1, -1)))
         probabilities = list(predicted_results[0])
-        print('\n'.join([str(i) + ': ' + str(round(e * 100)) + '%' for i, e in enumerate(probabilities)]))
+        # print('\n'.join([str(i) + ': ' + str(round(e * 100)) + '%' for i, e in enumerate(probabilities)]))
+        probabilities = [round(e * 100)for i, e in enumerate(probabilities)]
         result = probabilities.index(max(probabilities))
-        self.label.setText(str(result))
-
+        for index, label in enumerate(self.labels):
+            label.setText(str(index) + ": " + str(probabilities[index]))
+            if result == index:
+                label.setStyleSheet("color: red;")
+            else:
+                label.setStyleSheet("color: black;")
 
 # create pyqt5 app
 App = QApplication(sys.argv)
